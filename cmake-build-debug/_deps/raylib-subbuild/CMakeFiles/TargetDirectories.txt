@@ -1,0 +1,3 @@
+C:/Users/MH/Documents/C/Project-Pacman/cmake-build-debug/_deps/raylib-subbuild/CMakeFiles/raylib-populate.dir
+C:/Users/MH/Documents/C/Project-Pacman/cmake-build-debug/_deps/raylib-subbuild/CMakeFiles/edit_cache.dir
+C:/Users/MH/Documents/C/Project-Pacman/cmake-build-debug/_deps/raylib-subbuild/CMakeFiles/rebuild_cache.dir
