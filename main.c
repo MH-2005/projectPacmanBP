@@ -6,12 +6,13 @@
 #include "scores.h"
 #include "level.h"
 
-int main() {
+int main(void) {
     InitWindow(700, 800, "Pac-Man");
     SetTargetFPS(60);
+    InitAudioDevice();
+
     while (!WindowShouldClose()) {
-        static int ch;
-        ch = Begin();
+        int ch = Begin();
         switch (ch) {
             case 0:
                 ch = maingame();
@@ -23,12 +24,15 @@ int main() {
                 show_score();
                 break;
             case 3:
+                CloseAudioDevice();
                 CloseWindow();
                 return 0;
             default:
                 break;
         }
     }
+
+    CloseAudioDevice();
     CloseWindow();
     return 0;
 }

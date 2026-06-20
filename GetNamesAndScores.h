@@ -1,8 +1,9 @@
-#pragma once   // FIX 1: اضافه شد تا از include چندباره جلوگیری بشه
+#pragma once
 
 #include <stdio.h>
 #include <raylib.h>
 #include <string.h>
+#include <math.h>
 
 #define FONT_SIZE 30
 #define PADDING 10
@@ -21,10 +22,10 @@ void getnames(char *outputName, size_t outputSize, Font customFont) {
     float showWelcomeTime = 0.0f;
 
     Rectangle inputBox = {
-            GetScreenWidth() / 2.0f - 250,
-            GetScreenHeight() / 2.0f + FONT_SIZE / 2.0f - 10,
-            500,
-            FONT_SIZE + 4 * PADDING
+        GetScreenWidth() / 2.0f - 250,
+        GetScreenHeight() / 2.0f + FONT_SIZE / 2.0f - 10,
+        500,
+        FONT_SIZE + 4 * PADDING
     };
 
     while (!WindowShouldClose()) {
@@ -32,7 +33,8 @@ void getnames(char *outputName, size_t outputSize, Font customFont) {
             int key = GetCharPressed();
             while (key > 0) {
                 if ((key >= 32) && (key <= 125) && (nameLength < MAX_NAME_LENGTH - 1)) {
-                    if (MeasureText(playerName, FONT_SIZE) < inputBox.width - 2 * PADDING - FONT_SIZE) {
+                    float textW = MeasureTextEx(customFont, playerName, FONT_SIZE, 2).x;
+                    if (textW < inputBox.width - 2 * PADDING - FONT_SIZE) {
                         playerName[nameLength] = (char) key;
                         nameLength++;
                         playerName[nameLength] = '\0';
@@ -60,8 +62,8 @@ void getnames(char *outputName, size_t outputSize, Font customFont) {
             if (inputPhase) {
                 const char *prompt = "Enter your name:";
                 Vector2 promptPos = {
-                        GetScreenWidth() / 2.0f - MeasureText(prompt, FONT_SIZE) / 2.0f,
-                        GetScreenHeight() / 2.0f - FONT_SIZE - PADDING - 20
+                    GetScreenWidth() / 2.0f - MeasureTextEx(customFont, prompt, FONT_SIZE, 2).x / 2.0f,
+                    GetScreenHeight() / 2.0f - FONT_SIZE - PADDING - 20
                 };
                 DrawTextEx(customFont, prompt, (Vector2){promptPos.x, promptPos.y}, FONT_SIZE, 2, TEXT_COLOR);
 
@@ -69,24 +71,22 @@ void getnames(char *outputName, size_t outputSize, Font customFont) {
                 DrawRectangleLinesEx(inputBox, 2, BORDER_COLOR);
 
                 Vector2 textPos = {
-                        inputBox.x + PADDING,
-                        inputBox.y + (inputBox.height - FONT_SIZE) / 2
+                    inputBox.x + PADDING,
+                    inputBox.y + (inputBox.height - FONT_SIZE) / 2
                 };
                 DrawTextEx(customFont, playerName, (Vector2){textPos.x, textPos.y}, FONT_SIZE, 2, TEXT_COLOR);
 
-                // FIX 2: پرانتز fmod اشتباه بود، باید اینجور باشه:
-                // قبلا: fmod((GetTime() * 2), 2 < 1)   <- 2<1 همیشه 0 بود، cursor هیچوقت blink نمی‌کرد
-                // الان: fmod(GetTime() * 2, 2) < 1     <- درست
+                float cursorOffset = MeasureTextEx(customFont, playerName, FONT_SIZE, 2).x;
                 if (isInputActive && (fmod(GetTime() * 2, 2) < 1)) {
-                    DrawTextEx(customFont, "_", (Vector2){textPos.x + MeasureText(playerName, FONT_SIZE), textPos.y},
+                    DrawTextEx(customFont, "_", (Vector2){textPos.x + cursorOffset, textPos.y},
                                FONT_SIZE, 2, TEXT_COLOR);
                 }
             } else {
                 char welcomeText[100];
-                sprintf(welcomeText, "Welcome, %s!", playerName);
+                snprintf(welcomeText, sizeof(welcomeText), "Welcome, %s!", playerName);
                 Vector2 welcomePos = {
-                        GetScreenWidth() / 2.0f - MeasureText(welcomeText, FONT_SIZE) / 2.0f,
-                        GetScreenHeight() / 2.0f - FONT_SIZE / 2.0f
+                    GetScreenWidth() / 2.0f - MeasureTextEx(customFont, welcomeText, FONT_SIZE, 2).x / 2.0f,
+                    GetScreenHeight() / 2.0f - FONT_SIZE / 2.0f
                 };
                 DrawTextEx(customFont, welcomeText, (Vector2){welcomePos.x, welcomePos.y}, FONT_SIZE, 2, TEXT_COLOR);
 
