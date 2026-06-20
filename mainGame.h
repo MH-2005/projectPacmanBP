@@ -25,6 +25,7 @@ typedef struct {
     char time[50];
 } Player;
 
+// function prototypes
 void resetMaze(void);
 void reset_elapsed_time(void);
 int comparePlayers(const void *a, const void *b);
@@ -45,47 +46,49 @@ void unloadGameResources(Texture2D textures[5], Texture2D PacMan[16], Texture2D 
 Vector2 getPlayerStartPosition(void);
 int maingame(void);
 
+// ---- Initial maze layout ----
 char initialmaze_I[MAZE_HEIGHT][MAZE_WIDTH] = {
-    "############################",
-    "#            ##            #",
-    "# ###### ### ## ### ###### #",
-    "# ###### ### ## ### ###### #",
-    "#      #     ##     #      #",
-    "### ## # ### ## ### # ## ###",
-    "### ## # ### ## ### # ## ###",
-    "#   ##                ##   #",
-    "# #### ### ###### ### #### #",
-    "# #### ### ###### ### #### #",
-    "#                          #",
-    "### ## ## ###__### ## ## ###",
-    "### ## ## #RRRRRR# ## ## ###",
-    "#         #RRRRRR#         #",
-    "# #### ## #RRRRRR# ## #### #",
-    "# #### ## ######## ## #### #",
-    "#    #        @       #    #",
-    "#### # ## ######## ## # ####",
-    "#### # ## ######## ## # ####",
-    "#      ##    ##    ##      #",
-    "# ########## ## ########## #",
-    "# ########## ## ########## #",
-    "#    ##              ##    #",
-    "#### ## #### ## #### ## ####",
-    "#### ## #### ## #### ## ####",
-    "#         ##    ##         #",
-    "# ### ### ######## ### ### #",
-    "# ### ### ######## ### ### #",
-    "#                          #",
-    "############################"
+        "############################",
+        "#            ##            #",
+        "# ###### ### ## ### ###### #",
+        "# ###### ### ## ### ###### #",
+        "#      #     ##     #      #",
+        "### ## # ### ## ### # ## ###",
+        "### ## # ### ## ### # ## ###",
+        "#   ##                ##   #",
+        "# #### ### ###### ### #### #",
+        "# #### ### ###### ### #### #",
+        "#                          #",
+        "### ## ## ###__### ## ## ###",
+        "### ## ## #RRRRRR# ## ## ###",
+        "#         #RRRRRR#         #",
+        "# #### ## #RRRRRR# ## #### #",
+        "# #### ## ######## ## #### #",
+        "#    #        @       #    #",
+        "#### # ## ######## ## # ####",
+        "#### # ## ######## ## # ####",
+        "#      ##    ##    ##      #",
+        "# ########## ## ########## #",
+        "# ########## ## ########## #",
+        "#    ##              ##    #",
+        "#### ## #### ## #### ## ####",
+        "#### ## #### ## #### ## ####",
+        "#         ##    ##         #",
+        "# ### ### ######## ### ### #",
+        "# ### ### ######## ### ### #",
+        "#                          #",
+        "############################"
 };
 
 char initialmaze[MAZE_HEIGHT][MAZE_WIDTH];
 
 const int tileSize = 20;
 
+// item counters
 static int s_count = 0, g_count = 0, f_count = 0, a_count = 0, m_count = 0;
-static int ch_a = 0;
-static int C_s = 10;
+static int ch_a = 0;   // number of apples currently on the board
 
+// blinking effect for Pac‑Man when gaining a life
 static int prev_lives = 3;
 static int blink_tr = 255;
 static float blink_timer = 0.0f;
@@ -93,23 +96,27 @@ static int blink_dir = -1;
 static float blink_reset_timer = 0.0f;
 static bool blinking = false;
 
+// Pac‑Man animation
 static float pac_anim_timer = 0.0f;
 static int pac_current_frame = 0;
 static int pac_frame_dir = 1;
 
+// movement & power‑up timers
 static float move_timer = 0.0f;
 static float move_frameTime = 0.2f;
-static float speed_timer_f = 0.0f;
-static float speed_timer_g = 0.0f;
-static int ff = 0;
-static int gg = 0;
+static float speed_timer_f = 0.0f;   // speed boost (pepper)
+static float speed_timer_g = 0.0f;   // ghost power (cherry)
+static int ff = 0;   // active pepper count
+static int gg = 0;   // active cherry count
 static bool movement_started = false;
 
+// death animation
 static bool death_anim_done = false;
 static int death_choice = 0;
 static int death_current_frame = 0;
 static float death_timer = 0.0f;
 
+// ---- comparison for high‑score table ----
 int comparePlayers(const void *a, const void *b) {
     Player *playerA = (Player *) a;
     Player *playerB = (Player *) b;
@@ -119,6 +126,7 @@ int comparePlayers(const void *a, const void *b) {
     return playerA->total_time - playerB->total_time;
 }
 
+// ---- helper structures & functions for item placement ----
 typedef struct {
     int i;
     int j;
@@ -149,44 +157,79 @@ static CellPos pick_random_empty(void) {
     return empty_cells[idx];
 }
 
+// ---- immediately respawn a collected item at a safe distance from the player ----
+void respawn_item(char itemType, int player_i, int player_j) {
+#define RESPAWN_MIN_DIST 10.0f
+    CellPos candidates[MAZE_HEIGHT * MAZE_WIDTH];
+    int cand_count = 0;
+
+    // first, look for empty cells far enough from the player
+    for (int i = 0; i < MAZE_HEIGHT; i++) {
+        for (int j = 0; j < MAZE_WIDTH; j++) {
+            if (initialmaze[i][j] == ' ') {
+                if (get_distance(i, j, player_i, player_j) >= RESPAWN_MIN_DIST) {
+                    candidates[cand_count].i = i;
+                    candidates[cand_count].j = j;
+                    cand_count++;
+                }
+            }
+        }
+    }
+
+    // fallback: if no distant cell exists, use any empty cell
+    if (cand_count == 0) {
+        for (int i = 0; i < MAZE_HEIGHT; i++) {
+            for (int j = 0; j < MAZE_WIDTH; j++) {
+                if (initialmaze[i][j] == ' ') {
+                    candidates[cand_count].i = i;
+                    candidates[cand_count].j = j;
+                    cand_count++;
+                }
+            }
+        }
+    }
+
+    if (cand_count > 0) {
+        int idx = rand() % cand_count;
+        initialmaze[candidates[idx].i][candidates[idx].j] = itemType;
+
+        // update the item counter
+        switch (itemType) {
+            case 's': s_count++; break;
+            case 'g': g_count++; break;
+            case 'f': f_count++; break;
+            case 'a': a_count++; break;
+            case 'm': m_count++; break;
+        }
+    }
+}
+
+// ---- initial placement of items at game start ----
 static void place_items(void) {
     build_empty_cells_list();
 
-    for (int attempt = 0; attempt < 1000 && (s_count < 10 || g_count < 2 || f_count < 2 ||
-         a_count < 1 || m_count < 2); attempt++) {
+    for (int attempt = 0; attempt < 1000 &&
+                          (s_count < 10 || g_count < 2 || f_count < 2 || a_count < 1 || m_count < 2);
+         attempt++) {
         CellPos cell = pick_random_empty();
         int ci = cell.i;
         int cj = cell.j;
 
         if (s_count < 10) {
-            if (initialmaze[ci][cj] == ' ') {
-                initialmaze[ci][cj] = 's';
-                s_count++;
-            }
+            if (initialmaze[ci][cj] == ' ') { initialmaze[ci][cj] = 's'; s_count++; }
         } else if (g_count < 2) {
-            if (initialmaze[ci][cj] == ' ') {
-                initialmaze[ci][cj] = 'g';
-                g_count++;
-            }
+            if (initialmaze[ci][cj] == ' ') { initialmaze[ci][cj] = 'g'; g_count++; }
         } else if (f_count < 2) {
-            if (initialmaze[ci][cj] == ' ') {
-                initialmaze[ci][cj] = 'f';
-                f_count++;
-            }
+            if (initialmaze[ci][cj] == ' ') { initialmaze[ci][cj] = 'f'; f_count++; }
         } else if (a_count < 1) {
-            if (initialmaze[ci][cj] == ' ') {
-                initialmaze[ci][cj] = 'a';
-                a_count++;
-            }
+            if (initialmaze[ci][cj] == ' ') { initialmaze[ci][cj] = 'a'; a_count++; }
         } else if (m_count < 2) {
-            if (initialmaze[ci][cj] == ' ') {
-                initialmaze[ci][cj] = 'm';
-                m_count++;
-            }
+            if (initialmaze[ci][cj] == ' ') { initialmaze[ci][cj] = 'm'; m_count++; }
         }
     }
 }
 
+// ---- draw the maze walls ----
 int map(void) {
     Color MY_BLUE = (Color){50, 120, 140, 255};
     const int borderThickness = 4;
@@ -212,6 +255,7 @@ int map(void) {
     return count;
 }
 
+// ---- draw items and locate Pac‑Man start ----
 void draw_items(Texture2D textures[5], int *ii, int *jj) {
     ch_a = 0;
     for (int i = 0; i < MAZE_HEIGHT; i++) {
@@ -238,6 +282,7 @@ void draw_items(Texture2D textures[5], int *ii, int *jj) {
     }
 }
 
+// ---- draw Pac‑Man with animation and blinking ----
 void pacman(Texture2D PacMan[16], int i, int j, int currentDirection, int h) {
     (void) h;
 
@@ -245,38 +290,25 @@ void pacman(Texture2D PacMan[16], int i, int j, int currentDirection, int h) {
     if (pac_anim_timer >= 0.1f) {
         pac_anim_timer = 0.0f;
         pac_current_frame += pac_frame_dir;
-        if (pac_current_frame >= 3) {
-            pac_current_frame = 3;
-            pac_frame_dir = -1;
-        } else if (pac_current_frame <= 0) {
-            pac_current_frame = 0;
-            pac_frame_dir = 1;
-        }
+        if (pac_current_frame >= 3) { pac_current_frame = 3; pac_frame_dir = -1; }
+        else if (pac_current_frame <= 0) { pac_current_frame = 0; pac_frame_dir = 1; }
     }
 
     int finalFrame = currentDirection * 4 + pac_current_frame;
-    if (finalFrame < 0 || finalFrame >= 16) {
-        finalFrame = currentDirection * 4;
-    }
+    if (finalFrame < 0 || finalFrame >= 16) finalFrame = currentDirection * 4;
 
     int x = j * tileSize + 70;
     int y = i * tileSize + 70;
 
+    // blinking when invulnerable after gaining a life
     if (blinking) {
         blink_timer += GetFrameTime();
         if (blink_timer >= 0.1f) {
             blink_timer = 0.0f;
             blink_tr += blink_dir * 50;
-            if (blink_tr <= 100) {
-                blink_tr = 100;
-                blink_dir = 1;
-            }
-            if (blink_tr >= 255) {
-                blink_tr = 255;
-                blink_dir = -1;
-            }
+            if (blink_tr <= 100) { blink_tr = 100; blink_dir = 1; }
+            if (blink_tr >= 255) { blink_tr = 255; blink_dir = -1; }
         }
-
         blink_reset_timer += GetFrameTime();
         if (blink_reset_timer >= 1.0f) {
             blink_reset_timer = 0.0f;
@@ -289,81 +321,87 @@ void pacman(Texture2D PacMan[16], int i, int j, int currentDirection, int h) {
     DrawTextureEx(PacMan[finalFrame], (Vector2){x, y}, 0.0f, 1, semiTransparentWhite);
 }
 
+// ---- check if a cell is walkable by Pac‑Man ----
 static bool is_walkable(int i, int j) {
     if (i < 0 || i >= MAZE_HEIGHT || j < 0 || j >= MAZE_WIDTH) return false;
     char c = initialmaze[i][j];
     return c != '#' && c != '_';
 }
 
+// ---- handle Pac‑Man movement, item collection, and power‑up timers ----
 void movement(int *i, int *j, int *currentDirection, int *star,
               int *timer_p, int *timer_q, int *lives, int *wait_f, int *wait_g) {
+    // start movement on first key press
     if (!movement_started && (IsKeyDown(KEY_UP) || IsKeyDown(KEY_DOWN) ||
                               IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT))) {
         movement_started = true;
     }
     if (!movement_started) return;
 
-    if (IsKeyDown(KEY_RIGHT) && is_walkable(*i, *j + 1)) {
-        *currentDirection = 0;
-    } else if (IsKeyDown(KEY_LEFT) && is_walkable(*i, *j - 1)) {
-        *currentDirection = 1;
-    } else if (IsKeyDown(KEY_UP) && is_walkable(*i - 1, *j)) {
-        *currentDirection = 2;
-    } else if (IsKeyDown(KEY_DOWN) && is_walkable(*i + 1, *j)) {
-        *currentDirection = 3;
-    }
+    // change direction (only if the adjacent cell is walkable)
+    if (IsKeyDown(KEY_RIGHT) && is_walkable(*i, *j + 1)) *currentDirection = 0;
+    else if (IsKeyDown(KEY_LEFT) && is_walkable(*i, *j - 1)) *currentDirection = 1;
+    else if (IsKeyDown(KEY_UP) && is_walkable(*i - 1, *j)) *currentDirection = 2;
+    else if (IsKeyDown(KEY_DOWN) && is_walkable(*i + 1, *j)) *currentDirection = 3;
 
     move_timer += GetFrameTime();
     if (move_timer >= move_frameTime) {
         move_timer = 0.0f;
-        int new_i = *i;
-        int new_j = *j;
+        int new_i = *i, new_j = *j;
 
-        if (*currentDirection == 0 && is_walkable(*i, *j + 1)) {
-            new_j++;
-        } else if (*currentDirection == 1 && is_walkable(*i, *j - 1)) {
-            new_j--;
-        } else if (*currentDirection == 2 && is_walkable(*i - 1, *j)) {
-            new_i--;
-        } else if (*currentDirection == 3 && is_walkable(*i + 1, *j)) {
-            new_i++;
-        }
+        if (*currentDirection == 0 && is_walkable(*i, *j + 1)) new_j++;
+        else if (*currentDirection == 1 && is_walkable(*i, *j - 1)) new_j--;
+        else if (*currentDirection == 2 && is_walkable(*i - 1, *j)) new_i--;
+        else if (*currentDirection == 3 && is_walkable(*i + 1, *j)) new_i++;
 
         if (new_i != *i || new_j != *j) {
             char dest = initialmaze[new_i][new_j];
+            char eaten_item = 0;   // remember which item was collected
+
+            // collect item effects
             if (dest == 's') {
                 (*star)++;
                 s_count--;
-                C_s--;
-                if (C_s <= 0) {
-                    C_s = 10;
-                    place_items();
-                }
+                eaten_item = 's';
             } else if (dest == 'f') {
-                move_frameTime = 0.1f;
+                move_frameTime = 0.1f;      // speed boost
                 *wait_f += 10;
                 ff++;
                 speed_timer_f = 0;
+                f_count--;
+                eaten_item = 'f';
             } else if (dest == 'a') {
                 (*lives)++;
                 a_count--;
+                eaten_item = 'a';
             } else if (dest == 'm') {
                 (*lives)--;
                 m_count--;
+                eaten_item = 'm';
             } else if (dest == 'g') {
-                (*lives)++;
+                *wait_g += 10;
                 gg++;
+                speed_timer_g = 0;
+                g_count--;
+                eaten_item = 'g';
             }
 
+            // move Pac‑Man
             initialmaze[*i][*j] = ' ';
             initialmaze[new_i][new_j] = '@';
             *i = new_i;
             *j = new_j;
+
+            // immediately respawn the collected item
+            if (eaten_item != 0) {
+                respawn_item(eaten_item, *i, *j);
+            }
         }
     }
 
+    // speed boost (pepper) timer
     speed_timer_f += GetFrameTime();
-    if (ff > 0 && *wait_f > 0 && speed_timer_f >= (float) *wait_f) {
+    if (ff > 0 && *wait_f > 0 && speed_timer_f >= (float)*wait_f) {
         move_frameTime = 0.2f;
         speed_timer_f = 0.0f;
         *wait_f = 0;
@@ -372,27 +410,28 @@ void movement(int *i, int *j, int *currentDirection, int *star,
         ff = 0;
     }
 
+    // ghost power (cherry) timer
     speed_timer_g += GetFrameTime();
-    if (gg > 0 && *wait_g > 0 && speed_timer_g >= (float) *wait_g) {
-        (*lives)--;
+    if (gg > 0 && *wait_g > 0 && speed_timer_g >= (float)*wait_g) {
         speed_timer_g = 0.0f;
         *wait_g = 0;
-        g_count -= gg;
-        if (g_count < 0) g_count = 0;
         gg = 0;
     }
 
-    *timer_p = *wait_f > 0 ? (*wait_f - (int) speed_timer_f) : 0;
-    *timer_q = *wait_g > 0 ? (*wait_g - (int) speed_timer_g) : 0;
+    // remaining time on power‑ups (for display)
+    *timer_p = *wait_f > 0 ? (*wait_f - (int)speed_timer_f) : 0;
+    *timer_q = *wait_g > 0 ? (*wait_g - (int)speed_timer_g) : 0;
 }
 
+// ---- utility to convert a string to lowercase ----
 void toLowerCase(char *str) {
     while (*str) {
-        *str = tolower((unsigned char) *str);
+        *str = tolower((unsigned char)*str);
         str++;
     }
 }
 
+// ---- game over screen ----
 int GameOver(Texture2D deathAnim[11], Texture2D gameover, Color myColor,
              int i, int j, int star, char name[30],
              Font pacmanFont, int minutes, int seconds) {
@@ -403,18 +442,13 @@ int GameOver(Texture2D deathAnim[11], Texture2D gameover, Color myColor,
         death_timer += GetFrameTime();
         if (death_timer >= 0.2f) {
             death_timer = 0.0f;
-            if (death_current_frame < 10) {
-                death_current_frame++;
-            }
+            if (death_current_frame < 10) death_current_frame++;
         }
 
         int x = j * tileSize + 70;
         int y = i * tileSize + 70;
-
         DrawTexture(deathAnim[death_current_frame], x, y, WHITE);
-        if (death_current_frame >= 10) {
-            death_anim_done = true;
-        }
+        if (death_current_frame >= 10) death_anim_done = true;
     } else {
         Color tc[2] = {RAYWHITE, RAYWHITE};
         tc[death_choice] = GREEN;
@@ -422,12 +456,8 @@ int GameOver(Texture2D deathAnim[11], Texture2D gameover, Color myColor,
         DrawText("Give it another shot!", 120, 630, 40, tc[0]);
         DrawText("Back to Main Menu", 140, 700, 40, tc[1]);
 
-        if (IsKeyPressed(KEY_DOWN)) {
-            death_choice = (death_choice + 1) % 2;
-        }
-        if (IsKeyPressed(KEY_UP)) {
-            death_choice = (death_choice - 1 + 2) % 2;
-        }
+        if (IsKeyPressed(KEY_DOWN)) death_choice = (death_choice + 1) % 2;
+        if (IsKeyPressed(KEY_UP))   death_choice = (death_choice - 1 + 2) % 2;
         if (IsKeyPressed(KEY_ENTER)) {
             int choice = death_choice;
             death_anim_done = false;
@@ -453,6 +483,7 @@ int GameOver(Texture2D deathAnim[11], Texture2D gameover, Color myColor,
     return -1;
 }
 
+// ---- save player record ----
 int save_player(char *player_name, int star, int minutes, int seconds) {
     Player players[MAX_PLAYERS + 1];
     int player_count = 0;
@@ -483,9 +514,7 @@ int save_player(char *player_name, int star, int minutes, int seconds) {
 
     qsort(players, player_count, sizeof(Player), comparePlayers);
 
-    if (player_count > MAX_PLAYERS) {
-        player_count = MAX_PLAYERS;
-    }
+    if (player_count > MAX_PLAYERS) player_count = MAX_PLAYERS;
 
     fp = fopen("saves.bin", "wb");
     if (fp == NULL) {
@@ -494,10 +523,10 @@ int save_player(char *player_name, int star, int minutes, int seconds) {
     }
     fwrite(players, sizeof(Player), player_count, fp);
     fclose(fp);
-
     return EXIT_SUCCESS;
 }
 
+// ---- main game function ----
 int maingame(void) {
     Music backgroundMusic = LoadMusicStream("../assets/audio/take_on_me_small.mp3");
     PlayMusicStream(backgroundMusic);
@@ -513,27 +542,18 @@ int maingame(void) {
     reset_elapsed_time();
     reset_ghost_search();
 
+    // reset animation & power‑up states
     prev_lives = 3;
     blink_tr = 255;
-    blink_timer = 0.0f;
-    blink_dir = -1;
-    blink_reset_timer = 0.0f;
-    blinking = false;
-    pac_anim_timer = 0.0f;
-    pac_current_frame = 0;
-    pac_frame_dir = 1;
-    move_timer = 0.0f;
-    move_frameTime = 0.2f;
-    speed_timer_f = 0.0f;
-    speed_timer_g = 0.0f;
-    ff = 0;
-    gg = 0;
+    blink_timer = 0.0f; blink_dir = -1; blink_reset_timer = 0.0f; blinking = false;
+    pac_anim_timer = 0.0f; pac_current_frame = 0; pac_frame_dir = 1;
+    move_timer = 0.0f; move_frameTime = 0.2f;
+    speed_timer_f = 0.0f; speed_timer_g = 0.0f;
+    ff = 0; gg = 0;
     movement_started = false;
-    death_anim_done = false;
-    death_choice = 0;
-    death_current_frame = 0;
-    death_timer = 0.0f;
+    death_anim_done = false; death_choice = 0; death_current_frame = 0; death_timer = 0.0f;
 
+    // load textures
     Texture2D textures[5];
     textures[0] = LoadTexture("../assets/sprites/Points/star.png");
     textures[1] = LoadTexture("../assets/sprites/Points/cherry.png");
@@ -546,18 +566,20 @@ int maingame(void) {
     for (int n = 0; n < 4; n++) {
         for (int m = 0; m < 4; m++) {
             char location[128];
-            snprintf(location, sizeof(location), "../assets/sprites/pac/Direction/%s/%d.png", Direction[n], m + 1);
+            snprintf(location, sizeof(location),
+                     "../assets/sprites/pac/Direction/%s/%d.png", Direction[n], m + 1);
             PacMan[n * 4 + m] = LoadTexture(location);
         }
     }
 
     Texture2D ghost[40];
     char ghost_location[5][10] = {"blue", "green", "orange", "pink", "red"};
-    char ghost_dir[8][3] = {"D1", "D2", "L1", "L2", "R1", "R2", "U1", "U2"};
+    char ghost_dir[8][3] = {"D1","D2","L1","L2","R1","R2","U1","U2"};
     for (int i = 0; i < 5; i++) {
         for (int j = 0; j < 8; j++) {
             char location[124];
-            snprintf(location, sizeof(location), "../assets/sprites/ghosts/%s/%s.png", ghost_location[i], ghost_dir[j]);
+            snprintf(location, sizeof(location),
+                     "../assets/sprites/ghosts/%s/%s.png", ghost_location[i], ghost_dir[j]);
             ghost[i * 8 + j] = LoadTexture(location);
         }
     }
@@ -566,14 +588,16 @@ int maingame(void) {
     char *g_b[4] = {"blue1", "blue2", "white1", "white2"};
     for (int n = 0; n < 4; n++) {
         char location[100];
-        snprintf(location, sizeof(location), "../assets/sprites/ghosts/vulnerable/%s.png", g_b[n]);
+        snprintf(location, sizeof(location),
+                 "../assets/sprites/ghosts/vulnerable/%s.png", g_b[n]);
         GHOST_BLUE[n] = LoadTexture(location);
     }
 
     Texture2D deathAnim[11];
     for (int i = 0; i < 11; i++) {
         char location[150];
-        snprintf(location, sizeof(location), "../assets/sprites/pac/deathAnim/death%d.png", i + 1);
+        snprintf(location, sizeof(location),
+                 "../assets/sprites/pac/deathAnim/death%d.png", i + 1);
         deathAnim[i] = LoadTexture(location);
     }
 
@@ -593,10 +617,12 @@ int maingame(void) {
     int lives = 3;
     int wait_f = 0, wait_g = 0;
 
+    // ---------- MAIN GAME LOOP ----------
     while (!WindowShouldClose()) {
         UpdateMusicStream(backgroundMusic);
 
         if (lives > 0) {
+            // blinking invulnerability when gaining a life
             if (lives > prev_lives) {
                 blinking = true;
                 blink_timer = 0.0f;
@@ -611,61 +637,45 @@ int maingame(void) {
             map();
             draw_items(textures, &ii, &jj);
 
+            // move Pac‑Man and handle item collection
             movement(&ii, &jj, &currentDirection, &star,
                      &timer_p, &timer_q, &lives, &wait_f, &wait_g);
-
-            bool can_eat = (timer_q > 0);
 
             pacman(PacMan, ii, jj, currentDirection, lives);
             draw_score(star, timer_p, timer_q);
             heart(lives, Heart);
             print_Name_Time(player_name, customFont, &minutes, &seconds);
 
-            if (can_eat) {
-                eat_ghost(GHOST_BLUE, ii, jj, &star, &timer_q);
-            } else {
-                insert_ghost(ghost, ii, jj, &lives);
-            }
+            // UNIFIED ghost update & draw (handles both normal and vulnerable mode)
+            update_and_draw_ghosts(ghost, GHOST_BLUE, ii, jj, &lives, &star, timer_q);
 
             EndDrawing();
         } else {
             int ch = GameOver(deathAnim, gameover, myColor, ii, jj, star,
                               player_name, pacmanFont, minutes, seconds);
-            if (ch == 0) {
-                r = 0;
-                break;
-            }
-            if (ch == 1) {
-                r = 1;
-                break;
-            }
+            if (ch == 0) { r = 0; break; }
+            if (ch == 1) { r = 1; break; }
         }
     }
 
     save_player(player_name, star * 10, minutes, seconds);
-
     unloadGameResources(textures, PacMan, ghost, GHOST_BLUE, deathAnim, gameover, Heart,
                         pacmanFont, customFont, backgroundMusic);
-
     return r;
 }
 
+// ---- reset the maze to its initial state ----
 void resetMaze(void) {
     for (int i = 0; i < MAZE_HEIGHT; i++) {
         for (int j = 0; j < MAZE_WIDTH; j++) {
             initialmaze[i][j] = initialmaze_I[i][j];
         }
     }
-
-    s_count = 0;
-    g_count = 0;
-    f_count = 0;
-    a_count = 0;
-    m_count = 0;
+    s_count = 0; g_count = 0; f_count = 0; a_count = 0; m_count = 0;
     ch_a = 0;
-    C_s = 10;
 }
 
+// ---- unload all textures, fonts and music ----
 void unloadGameResources(Texture2D textures[5], Texture2D PacMan[16], Texture2D ghost[40],
                          Texture2D GHOST_BLUE[4], Texture2D deathAnim[11],
                          Texture2D gameover, Texture2D Heart,
@@ -683,6 +693,7 @@ void unloadGameResources(Texture2D textures[5], Texture2D PacMan[16], Texture2D 
     UnloadMusicStream(backgroundMusic);
 }
 
+// ---- find the cell containing '@' ----
 Vector2 getPlayerStartPosition(void) {
     for (int i = 0; i < MAZE_HEIGHT; i++) {
         for (int j = 0; j < MAZE_WIDTH; j++) {
